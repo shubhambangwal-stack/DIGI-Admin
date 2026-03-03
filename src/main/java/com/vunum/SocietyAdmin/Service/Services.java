@@ -14,6 +14,7 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
@@ -24,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Slf4j
 @Service
 public class Services {
     @Autowired
@@ -94,28 +96,44 @@ public class Services {
     private EmailService emailService;
 
     public ResponseEntity<?> loginPost(RequestDTO.Commonrequest request,
-                                       HttpServletRequest requests) {
+            HttpServletRequest requests) {
 
+        log.info("[loginPost] Attempting login for userName: '{}'", request.getUserName());
         try {
-            Admin admin = adminRepository.findByEmail(request.getUserName()).orElseThrow(() ->
-                    new BadCredentialsException("User not Found"));
+            log.debug("[loginPost] Looking up admin by email: '{}'", request.getUserName());
+            Admin admin = adminRepository.findByEmail(request.getUserName())
+                    .orElseThrow(() -> new BadCredentialsException("User not Found"));
+            log.info("[loginPost] Admin found - id: {}, role: {}", admin.getId(), admin.getRole());
+
+            log.debug("[loginPost] Authenticating credentials for: '{}'", request.getUserName());
             authenticationManager.authenticate(
                     new UsernamePasswordAuthenticationToken(request.getUserName(), request.getPassword()));
+            log.info("[loginPost] Authentication successful for: '{}'", request.getUserName());
+
             admin.setLastLogin(LocalDateTime.now());
-            admin.setIP(requests.getHeader("X-Forwarded-For"));
+            String clientIP = requests.getHeader("X-Forwarded-For");
+            admin.setIP(clientIP);
+            log.debug("[loginPost] Generating JWT token for: '{}', IP: '{}'", request.getUserName(), clientIP);
             admin.setToken(jwtTokenUtil.generateToken(admin.getEmail(), admin.getRole().toString()));
             admin.setStatus(true);
-            return ResponseEntity.ok().body(adminRepository.save(admin));
+            Admin saved = adminRepository.save(admin);
+            log.info("[loginPost] Login complete - token generated and session saved for: '{}'", request.getUserName());
+            return ResponseEntity.ok().body(saved);
+        } catch (BadCredentialsException e) {
+            log.warn("[loginPost] Bad credentials or user not found for: '{}' - {}", request.getUserName(),
+                    e.getMessage());
+            throw new RuntimeException(e);
         } catch (Exception e) {
+            log.error("[loginPost] Unexpected error during login for: '{}' - {}", request.getUserName(), e.getMessage(),
+                    e);
             throw new RuntimeException(e);
         }
     }
 
     public ResponseEntity<?> loginGet(String auth, HttpServletRequest requests) {
-        Admin admin = adminRepository.findBytoken(auth.substring(7)).orElseThrow(()
-                -> new UsernameNotFoundException("Session Expired"));
-        if (jwtTokenUtil.validateToken(auth.substring(7)
-                , admin.getEmail())) {
+        Admin admin = adminRepository.findBytoken(auth.substring(7))
+                .orElseThrow(() -> new UsernameNotFoundException("Session Expired"));
+        if (jwtTokenUtil.validateToken(auth.substring(7), admin.getEmail())) {
             admin.setIP(requests.getHeader("X-Forwarded-For"));
             admin.setStatus(true);
             admin.setLastLogin(LocalDateTime.now());
@@ -125,8 +143,8 @@ public class Services {
     }
 
     public ResponseEntity<?> logout(String auth, HttpServletRequest request) {
-        Admin admin = adminRepository.findBytoken(auth.substring(7)).orElseThrow(()
-                -> new UsernameNotFoundException("Session Expired"));
+        Admin admin = adminRepository.findBytoken(auth.substring(7))
+                .orElseThrow(() -> new UsernameNotFoundException("Session Expired"));
         admin.setIP(request.getHeader("X-Forwarded-For"));
         admin.setStatus(false);
         adminRepository.save(admin);
@@ -182,8 +200,7 @@ public class Services {
         return ResponseEntity.ok(
                 userRepository.findAll().stream()
                         .filter(u -> u.getRole().equals(Users.Roles.user) || u.getRole().equals(Users.Roles.owner))
-                        .toList()
-        );
+                        .toList());
     }
 
     public ResponseEntity<?> getAllAssets() {
@@ -258,7 +275,6 @@ public class Services {
         return ResponseEntity.ok(serviceRequestRepository.findAll());
     }
 
-
     public ResponseEntity<?> getAllSocietyComponents() {
         return ResponseEntity.ok(societyComponentRepository.findAll());
     }
@@ -276,8 +292,8 @@ public class Services {
     }
 
     public ResponseEntity<?> getAllVendors(String Auth) {
-        Admin admin = adminRepository.findBytoken(Auth.substring(7)).orElseThrow(()
-                -> new UsernameNotFoundException("Session Expired"));
+        Admin admin = adminRepository.findBytoken(Auth.substring(7))
+                .orElseThrow(() -> new UsernameNotFoundException("Session Expired"));
         List<Vendor> VendorList = new ArrayList<>();
         for (Building building : admin.getBuildings()) {
             VendorList.addAll(vendorRepository.findByBuilding(building));
@@ -381,7 +397,6 @@ public class Services {
         return ResponseEntity.ok().body("Deleted");
     }
 
-
     public ResponseEntity<?> deleteSocietyComponent(Long Id) {
         societyComponentRepository.deleteById(Id);
         return ResponseEntity.ok().body("Deleted");
@@ -459,8 +474,7 @@ public class Services {
         try {
             if (existingBuilding != null) {
                 throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST, "Building with this number already exists"
-                );
+                        HttpStatus.BAD_REQUEST, "Building with this number already exists");
             }
             Building building = new Building();
 
@@ -486,13 +500,11 @@ public class Services {
         }
     }
 
-
     public ResponseEntity<?> getAllSyndics() {
         return ResponseEntity.ok(adminRepository.findAll()
                 .stream()
                 .filter(admin -> admin.getRole().equals(Admin.Roles.SYNDIC_ADMIN))
-                .toList()
-        );
+                .toList());
     }
 
     public ResponseEntity<?> getAllForums() {
@@ -505,23 +517,25 @@ public class Services {
     }
 
     public Notice uploadNoticeAdmin(Long id, String url, Long BuildingId, String Title,
-                                    String text, String Auth) {
-        Admin issuer = adminRepository.findBytoken(Auth).orElseThrow(() ->
-                new IllegalArgumentException("User not found"));
+            String text, String Auth) {
+        Admin issuer = adminRepository.findBytoken(Auth)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
         Notice notice = new Notice();
 
-        if (issuer.getBuildings() != null) notice.setBuilding(issuer.getBuildings().stream().filter(b ->
-                b.getId().equals(BuildingId)).findAny().orElse(null));
+        if (issuer.getBuildings() != null)
+            notice.setBuilding(
+                    issuer.getBuildings().stream().filter(b -> b.getId().equals(BuildingId)).findAny().orElse(null));
         Building building = null;
-        if (BuildingId != null) building = buildingManagementRepository.findById(BuildingId).orElse(null);
+        if (BuildingId != null)
+            building = buildingManagementRepository.findById(BuildingId).orElse(null);
         notice.setBuilding(building);
 
         notice.setType(Notice.type.general);
-        if (notice.getBuilding() != null) notice.setType(Notice.type.building_specific);
+        if (notice.getBuilding() != null)
+            notice.setType(Notice.type.building_specific);
 
         if (id != null) {
-            Users user = userRepository.findById(id).orElseThrow(() ->
-                    new IllegalArgumentException("User not found"));
+            Users user = userRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("User not found"));
             notice.setUser(user);
             notice.setType(Notice.type.specific);
         }
@@ -534,20 +548,20 @@ public class Services {
     }
 
     public Notice uploadNoticeSyndic(Long id, String url, Long BuildingId, String Title,
-                                     String text, MultipartFile file, String Auth) throws MessagingException, UnsupportedEncodingException {
-        Admin issuer = adminRepository.findBytoken(Auth).orElseThrow(() ->
-                new IllegalArgumentException("User not found"));
+            String text, MultipartFile file, String Auth) throws MessagingException, UnsupportedEncodingException {
+        Admin issuer = adminRepository.findBytoken(Auth)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
         Notice notice = new Notice();
 
         if (issuer.getBuildings() != null && BuildingId != null)
-            notice.setBuilding(issuer.getBuildings().stream().filter(b ->
-                    b.getId().equals(BuildingId)).findAny().orElse(null));
+            notice.setBuilding(
+                    issuer.getBuildings().stream().filter(b -> b.getId().equals(BuildingId)).findAny().orElse(null));
 
         notice.setType(Notice.type.general);
-        if (notice.getBuilding() != null) notice.setType(Notice.type.building_specific);
+        if (notice.getBuilding() != null)
+            notice.setType(Notice.type.building_specific);
         if (id != null) {
-            Users user = userRepository.findById(id).orElseThrow(() ->
-                    new IllegalArgumentException("User not found"));
+            Users user = userRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("User not found"));
             notice.setUser(user);
             notice.setType(Notice.type.specific);
         }
@@ -576,10 +590,9 @@ public class Services {
     }
 
     public void deleteNotice2(Long id, String Auth) {
-        Users user = userRepository.findBytoken(Auth).orElseThrow(() ->
-                new IllegalArgumentException("User not found"));
-        Notice notice = noticeRepository.findById(id).orElseThrow(() ->
-                new IllegalArgumentException("Notice not found"));
+        Users user = userRepository.findBytoken(Auth).orElseThrow(() -> new IllegalArgumentException("User not found"));
+        Notice notice = noticeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Notice not found"));
         if (!notice.getIssuer().equals(user.getRole().toString())) {
             throw new IllegalArgumentException("You are not authorized to delete this notice");
         }
@@ -591,8 +604,8 @@ public class Services {
             Admin syndic = adminRepository.findById(Id)
                     .orElseThrow(() -> new NoSuchElementException("User Not Found"));
             for (Long ID : request.getBuildingIds()) {
-                Building building = buildingManagementRepository.findById(ID).orElseThrow(() ->
-                        new NoSuchElementException("Building not Found"));
+                Building building = buildingManagementRepository.findById(ID)
+                        .orElseThrow(() -> new NoSuchElementException("Building not Found"));
 
                 building.setSyndicName(syndic.getSyndicName());
                 building.setSyndicAddress(syndic.getSyndicAddress());
@@ -615,8 +628,8 @@ public class Services {
             Admin syndic = adminRepository.findById(Id)
                     .orElseThrow(() -> new NoSuchElementException("User Not Found"));
             for (Long ID : request.getBuildingIds()) {
-                Building building = buildingManagementRepository.findById(ID).orElseThrow(() ->
-                        new NoSuchElementException("Building not Found"));
+                Building building = buildingManagementRepository.findById(ID)
+                        .orElseThrow(() -> new NoSuchElementException("Building not Found"));
 
                 building.setSyndicName("");
                 building.setSyndicAddress("");
@@ -634,7 +647,8 @@ public class Services {
         }
     }
 
-    public Helpdesk updateTicketStatus(RequestDTO.TicketRequest requestDTO, String token) throws MessagingException, UnsupportedEncodingException {
+    public Helpdesk updateTicketStatus(RequestDTO.TicketRequest requestDTO, String token)
+            throws MessagingException, UnsupportedEncodingException {
         Helpdesk ticket = helpdeskRepository.findById(requestDTO.getId())
                 .orElseThrow(() -> new IllegalArgumentException("Ticket not found"));
 
@@ -671,16 +685,18 @@ public class Services {
         return ResponseEntity.ok().body(vendorRepository.save(vendor));
     }
 
-
     public ResponseEntity<?> updateVendor(Long vendorId, RequestDTO.VendorRequest updatedVendor) {
         Optional<Vendor> vendorOptional = vendorRepository.findById(vendorId);
 
         if (vendorOptional.isPresent()) {
             Vendor vendor = vendorOptional.get();
 
-            if (updatedVendor.getName() != null) vendor.setName(updatedVendor.getName());
-            if (updatedVendor.getContactPerson() != null) vendor.setContactPerson(updatedVendor.getContactPerson());
-            if (updatedVendor.getEmail() != null) vendor.setEmail(updatedVendor.getEmail());
+            if (updatedVendor.getName() != null)
+                vendor.setName(updatedVendor.getName());
+            if (updatedVendor.getContactPerson() != null)
+                vendor.setContactPerson(updatedVendor.getContactPerson());
+            if (updatedVendor.getEmail() != null)
+                vendor.setEmail(updatedVendor.getEmail());
 
             return ResponseEntity.ok().body(vendorRepository.save(vendor));
         } else {
@@ -688,8 +704,10 @@ public class Services {
         }
     }
 
-    public GeneralBodyMeeting createMeeting(RequestDTO.MeetingRequest request, String token) throws IOException, MessagingException {
-        Admin admin = adminRepository.findBytoken(token).orElseThrow(() -> new IllegalArgumentException("Session expired"));
+    public GeneralBodyMeeting createMeeting(RequestDTO.MeetingRequest request, String token)
+            throws IOException, MessagingException {
+        Admin admin = adminRepository.findBytoken(token)
+                .orElseThrow(() -> new IllegalArgumentException("Session expired"));
 
         GeneralBodyMeeting meeting = new GeneralBodyMeeting();
         List<Users> attendees = new ArrayList<>();
@@ -723,11 +741,12 @@ public class Services {
     }
 
     public Poll createPoll(RequestDTO.PollRequest request) {
-        GeneralBodyMeeting meeting = generalBodyMeetingRepository.findById(request.getMeetingId()).orElseThrow(() ->
-                new IllegalArgumentException("Meeting not found"));
+        GeneralBodyMeeting meeting = generalBodyMeetingRepository.findById(request.getMeetingId())
+                .orElseThrow(() -> new IllegalArgumentException("Meeting not found"));
 
         List<Poll> pollList = new ArrayList<>();
-        if (!meeting.getPolls().isEmpty()) pollList = meeting.getPolls();
+        if (!meeting.getPolls().isEmpty())
+            pollList = meeting.getPolls();
 
         Poll poll = new Poll();
 
@@ -754,8 +773,8 @@ public class Services {
     }
 
     public ResponseEntity<?> addBuildingtoSyndic(RequestDTO.Commonrequest commonrequest) {
-        Admin syndic = adminRepository.findByEmail(commonrequest.getEmail()).orElseThrow(() ->
-                new IllegalArgumentException("User not found"));
+        Admin syndic = adminRepository.findByEmail(commonrequest.getEmail())
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
         Building building = buildingManagementRepository.findById(commonrequest.getBuildingId())
                 .orElseThrow(() -> new IllegalArgumentException("Building not found"));
 
@@ -858,7 +877,8 @@ public class Services {
 
     public List<Notice> getAllNoticesSyndic(String substring) throws Exception {
         Admin admin = adminRepository.findBytoken(substring).orElseThrow(() -> new Exception("Session Expired"));
-        if (!admin.getRole().equals(Admin.Roles.SYNDIC_ADMIN)) return null;
+        if (!admin.getRole().equals(Admin.Roles.SYNDIC_ADMIN))
+            return null;
         List<Notice> noticeList = new ArrayList<>();
         for (Building building : admin.getBuildings()) {
             noticeList.addAll(noticeRepository.findByBuilding(building));
@@ -871,7 +891,8 @@ public class Services {
 
     public ResponseEntity<?> getAllForumsSyndic(String substring) throws Exception {
         Admin admin = adminRepository.findBytoken(substring).orElseThrow(() -> new Exception("Session Expired"));
-        if (!admin.getRole().equals(Admin.Roles.SYNDIC_ADMIN)) return null;
+        if (!admin.getRole().equals(Admin.Roles.SYNDIC_ADMIN))
+            return null;
         List<ForumPost> forumList = new ArrayList<>();
         for (Building building : admin.getBuildings()) {
             forumList.addAll(forumRepository.findByBuilding(building));
@@ -905,8 +926,8 @@ public class Services {
 
     public Employee registerEmployee(RequestDTO.EmployeeDTO request, String auth) {
         try {
-            Admin issuer = adminRepository.findBytoken(auth).orElseThrow(() ->
-                    new IllegalArgumentException("User not found"));
+            Admin issuer = adminRepository.findBytoken(auth)
+                    .orElseThrow(() -> new IllegalArgumentException("User not found"));
             if (employeeRepository.findByEmail(request.getEmail()).isPresent()) {
                 throw new IllegalArgumentException("Employee already exists");
             }
@@ -941,8 +962,7 @@ public class Services {
             employeeRepository.save(employee);
 
             emailService.sendMail(employee.getEmail(), MailTemplates.accountAddedEmail(employee.getName()),
-                    "Welcome to Digi Immo"
-                    , null);
+                    "Welcome to Digi Immo", null);
             return employee;
         } catch (Exception e) {
             throw new RuntimeException(e);
@@ -950,8 +970,8 @@ public class Services {
     }
 
     public Employee assignBuilding(Long employeeId, RequestDTO.buildingRequest request) {
-        Employee employee = employeeRepository.findById(employeeId).orElseThrow(() ->
-                new IllegalArgumentException("Employee not found"));
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found"));
         List<Building> buildings = employee.getBuildingList() != null ? employee.getBuildingList() : new ArrayList<>();
         for (Long buildingId : request.getBuildingIds()) {
             Building building = buildingManagementRepository.findById(buildingId)
@@ -963,8 +983,8 @@ public class Services {
     }
 
     public Employee deAssignBuilding(Long employeeId, Long buildingId) {
-        Employee employee = employeeRepository.findById(employeeId).orElseThrow(() ->
-                new IllegalArgumentException("Employee not found"));
+        Employee employee = employeeRepository.findById(employeeId)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found"));
         Building building = buildingManagementRepository.findById(buildingId)
                 .orElseThrow(() -> new RuntimeException("Building Not Found"));
 
@@ -974,8 +994,8 @@ public class Services {
     }
 
     public Shift createShift(RequestDTO.ShiftRequest request, String token) {
-        Admin issuer = adminRepository.findBytoken(token).orElseThrow(() ->
-                new IllegalArgumentException("Session Expired"));
+        Admin issuer = adminRepository.findBytoken(token)
+                .orElseThrow(() -> new IllegalArgumentException("Session Expired"));
         Shift shift = new Shift();
         shift.setShiftName(request.getName());
         shift.setShiftEnd(request.getShiftEnd());
@@ -986,8 +1006,8 @@ public class Services {
     }
 
     public ResponseEntity<?> getAllShifts(String token) {
-        Admin issuer = adminRepository.findBytoken(token).orElseThrow(() ->
-                new IllegalArgumentException("User not found"));
+        Admin issuer = adminRepository.findBytoken(token)
+                .orElseThrow(() -> new IllegalArgumentException("User not found"));
         return ResponseEntity.ok(shiftRepository.findByIssuer(issuer));
     }
 
@@ -997,10 +1017,10 @@ public class Services {
     }
 
     public Employee assignShift(Long id, Long shiftId) {
-        Employee employee = employeeRepository.findById(id).orElseThrow(() ->
-                new IllegalArgumentException("Employee not found"));
-        Shift shift = shiftRepository.findById(shiftId).orElseThrow(() ->
-                new IllegalArgumentException("Shift not found"));
+        Employee employee = employeeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found"));
+        Shift shift = shiftRepository.findById(shiftId)
+                .orElseThrow(() -> new IllegalArgumentException("Shift not found"));
         if (employee.getAttendance() != null) {
             employee.getAttendance().setShift(shift);
         } else {
@@ -1012,8 +1032,8 @@ public class Services {
     }
 
     public ResponseEntity<?> getSpecificAttendance(Long id) {
-        return ResponseEntity.ok(employeeRepository.findById(id).orElseThrow(() ->
-                new IllegalArgumentException("Employee not found")).getAttendance());
+        return ResponseEntity.ok(employeeRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("Employee not found")).getAttendance());
     }
 
     public ResponseEntity<?> postAttendance(Long id, Long buidingId) {

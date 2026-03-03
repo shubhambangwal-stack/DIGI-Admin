@@ -51,13 +51,13 @@ public class AdminController {
 
     @PostMapping("/updateList/{Id}")
     public ResponseEntity<?> addBuildings(@PathVariable("Id") Long Id,
-                                          @ModelAttribute RequestDTO.buildingRequest request) {
+            @ModelAttribute RequestDTO.buildingRequest request) {
         return adminService.addBuildings(Id, request);
     }
 
     @PostMapping("/removeList/{Id}")
     public ResponseEntity<?> removeBuildingsFromSyndic(@PathVariable("Id") Long Id,
-                                                       @ModelAttribute RequestDTO.buildingRequest request) {
+            @ModelAttribute RequestDTO.buildingRequest request) {
         return adminService.removeBuildings(Id, request);
     }
 
@@ -72,14 +72,37 @@ public class AdminController {
 
     @PostMapping("/login")
     public ResponseEntity<?> postLogin(@ModelAttribute RequestDTO.Commonrequest request,
-                                       HttpServletRequest requests) {
-        return adminService.loginPost(request, requests);
+            HttpServletRequest requests) {
+        log.info("[POST /admin/login] Request received - userName: '{}', remoteAddr: '{}', X-Forwarded-For: '{}'",
+                request.getUserName(),
+                requests.getRemoteAddr(),
+                requests.getHeader("X-Forwarded-For"));
+        try {
+            ResponseEntity<?> response = adminService.loginPost(request, requests);
+            log.info("[POST /admin/login] Login successful for userName: '{}', status: {}",
+                    request.getUserName(), response.getStatusCode());
+            return response;
+        } catch (Exception e) {
+            log.error("[POST /admin/login] Login failed for userName: '{}' - error: {}",
+                    request.getUserName(), e.getMessage(), e);
+            throw e;
+        }
     }
 
     @GetMapping("/login")
     public ResponseEntity<?> getLogin(@RequestHeader("Authorization") String Auth,
-                                      HttpServletRequest requests) {
-        return adminService.loginGet(Auth, requests);
+            HttpServletRequest requests) {
+        log.info("[GET /admin/login] Token refresh request received - remoteAddr: '{}', X-Forwarded-For: '{}'",
+                requests.getRemoteAddr(),
+                requests.getHeader("X-Forwarded-For"));
+        try {
+            ResponseEntity<?> response = adminService.loginGet(Auth, requests);
+            log.info("[GET /admin/login] Token refresh successful - status: {}", response.getStatusCode());
+            return response;
+        } catch (Exception e) {
+            log.error("[GET /admin/login] Token refresh failed - error: {}", e.getMessage(), e);
+            throw e;
+        }
     }
 
     @PostMapping("/createUser")
@@ -92,13 +115,13 @@ public class AdminController {
         return adminService.createBuilding(request);
     }
 
-
     @PostMapping("/uploadNotice")
     public ResponseEntity<?> uploadFile(@ModelAttribute RequestDTO.Commonrequest request,
-                                        @RequestHeader("Authorization") String auth) {
+            @RequestHeader("Authorization") String auth) {
         try {
             String url = "";
-            if (request.getFile() != null) url = fileStackService.uploadFile(request.getFile());
+            if (request.getFile() != null)
+                url = fileStackService.uploadFile(request.getFile());
 
             Notice notice = adminService.uploadNoticeAdmin(request.getId(), url, request.getBuildingId(),
                     request.getTitle(), request.getData(),
@@ -114,8 +137,8 @@ public class AdminController {
     @PostMapping("/charges/addConfig")
     public ResponseEntity<?> updateConfig(@ModelAttribute RequestDTO.BillRequest request) {
         try {
-            Building building = buildingManagementRepository.findById(request.getBuildingId()).orElseThrow(() ->
-                    new RuntimeException("Building not found"));
+            Building building = buildingManagementRepository.findById(request.getBuildingId())
+                    .orElseThrow(() -> new RuntimeException("Building not found"));
             return ResponseEntity.ok().body(chargeCalculationService.addConfig(request, building));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getLocalizedMessage());
@@ -133,13 +156,12 @@ public class AdminController {
 
     @PostMapping("/charges/generate")
     public ResponseEntity<?> generateBills(@ModelAttribute RequestDTO.Commonrequest requestDTO,
-                                           @RequestParam("month") String billingMonth,
-                                           @RequestParam("dueDate") LocalDate dueDate) {
+            @RequestParam("month") String billingMonth,
+            @RequestParam("dueDate") LocalDate dueDate) {
         try {
             chargeCalculationService.calculateAndGenerateBills(requestDTO.getConsumptions(),
                     dueDate,
-                    billingMonth
-            );
+                    billingMonth);
             return ResponseEntity.ok().body("Bills generated for " + billingMonth);
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(e.getLocalizedMessage());
@@ -153,14 +175,14 @@ public class AdminController {
 
     @PutMapping("/updateDirectory/{Id}")
     public ResponseEntity<?> updateDirectory(@ModelAttribute RequestDTO.VendorRequest request,
-                                             @PathVariable("Id") Long VendorId) {
+            @PathVariable("Id") Long VendorId) {
         log.info("request Data {}", request.toString());
         return adminService.updateVendor(VendorId, request);
     }
 
     @PostMapping("/update-ticket")
     public ResponseEntity<?> updateTicket(@ModelAttribute RequestDTO.TicketRequest updatedTicket,
-                                          @RequestHeader("Authorization") String auth) {
+            @RequestHeader("Authorization") String auth) {
         try {
             return ResponseEntity.ok(adminService.updateTicketStatus(updatedTicket, auth.substring(7)));
         } catch (Exception e) {
@@ -168,15 +190,15 @@ public class AdminController {
         }
     }
 
-
     @GetMapping("/approveUser")
-    public ResponseEntity<?> approveUser(@RequestParam("userId") Long Id) throws MessagingException, UnsupportedEncodingException {
+    public ResponseEntity<?> approveUser(@RequestParam("userId") Long Id)
+            throws MessagingException, UnsupportedEncodingException {
         return adminService.approveUser(Id);
     }
 
     @GetMapping("/logout")
     public ResponseEntity<?> logout(@RequestHeader("Authorization") String Auth,
-                                    HttpServletRequest requests) {
+            HttpServletRequest requests) {
         return adminService.logout(Auth, requests);
     }
 
@@ -409,6 +431,5 @@ public class AdminController {
     public ResponseEntity<?> deleteVote(@RequestParam("Id") Long Id) {
         return adminService.deleteVote(Id);
     }
-
 
 }

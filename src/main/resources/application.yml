@@ -1,0 +1,57 @@
+app:
+    admin:
+        email: dev@pearlorganisation.com
+aws:
+    accessKey: AKIATNVEVZXDXPWXDKM6
+    bucketName: croscrowtest
+    region: ap-south-1
+    secretKey: 4Dx7xdPWP4L2Fc7pdqvr+HLq6CKfnoyyUqY9QnDf
+cloudinary:
+    api-key: 684972998842431
+    api-secret: W9N4wG2bYy7PIsUfuDiLZrgmO4k
+    cloud-name: dfrh2bbkn
+secret:
+    key: SmXhmb3JdHFjsCDRfiv04187HUfbdgiQxuiIiYpCJUoObLE=
+server:
+    port: 10000
+spring:
+    application:
+        name: SocietyAdmin
+    boot:
+        livereload: enable
+    datasource:
+        driver-class-name: org.postgresql.Driver
+        password: postgres
+        url: jdbc:postgresql://localhost:5432/society_db
+        username: postgres
+    jpa:
+        generate-ddl: true
+        hibernate:
+            ddl-auto: update
+        properties:
+            hibernate:
+                dialect: org.hibernate.dialect.PostgreSQLDialect
+                format_sql: true
+    mail:
+        host: smtp.gmail.com
+        password: lvxsmrqvotxumwbm
+        port: 587
+        properties:
+            mail:
+                debug: true
+                smtp:
+                    auth: true
+                    starttls:
+                        enable: true
+        username: subscriberch03@gmail.com
+    messages:
+        basename: messages
+    servlet:
+        multipart:
+            max-file-size: 100MB
+            max-request-size: 100MB
+twilio:
+    accountSid: AC841240b2a23c3c1b6db7fd4527a5f3e2
+    authToken: 0ad02fc9c4e9b583b70b6ebfb24dca81
+    phoneNumber: '""'
+    service-sid: VAaa3151194d198858168e0cbffc76ad08

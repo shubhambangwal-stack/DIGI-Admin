@@ -1,0 +1,8 @@
+digraph INFRA {
+  node [ color = "black", fillcolor = "#E6E6E6", height =1, style = "filled,bold,rounded", fontname = "Arial" ];
+  "CloudinaryService" [ label = "CloudinaryService
+(Java::Class)", shape =rectangle ];
+  "Cloudinary" [ label = "Cloudinary
+(External::Service)", shape =cylinder, fillcolor = "#FFF5CD" ];
+  "CloudinaryService" -> "Cloudinary";
+}

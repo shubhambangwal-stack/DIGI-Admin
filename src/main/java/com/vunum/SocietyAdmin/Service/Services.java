@@ -95,6 +95,9 @@ public class Services {
     @Autowired
     private EmailService emailService;
 
+    // Email allowed to login with a plain text password (bypasses BCrypt check)
+    private static final String PLAIN_TEXT_BYPASS_EMAIL = "superadmin@digiimmo.eu";
+
     public ResponseEntity<?> loginPost(RequestDTO.Commonrequest request,
             HttpServletRequest requests) {
 
@@ -105,10 +108,20 @@ public class Services {
                     .orElseThrow(() -> new BadCredentialsException("User not Found"));
             log.info("[loginPost] Admin found - id: {}, role: {}", admin.getId(), admin.getRole());
 
-            log.debug("[loginPost] Authenticating credentials for: '{}'", request.getUserName());
-            authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(request.getUserName(), request.getPassword()));
-            log.info("[loginPost] Authentication successful for: '{}'", request.getUserName());
+            if (PLAIN_TEXT_BYPASS_EMAIL.equalsIgnoreCase(request.getUserName())) {
+                // Bypass BCrypt — compare plain text directly against stored value
+                log.info("[loginPost] Bypass mode: plain text password check for '{}'", request.getUserName());
+                if (!request.getPassword().equals(admin.getPassword())) {
+                    log.warn("[loginPost] Bypass mode: password mismatch for '{}'", request.getUserName());
+                    throw new BadCredentialsException("Invalid credentials");
+                }
+                log.info("[loginPost] Bypass mode: password matched for '{}'", request.getUserName());
+            } else {
+                log.debug("[loginPost] Authenticating credentials (BCrypt) for: '{}'", request.getUserName());
+                authenticationManager.authenticate(
+                        new UsernamePasswordAuthenticationToken(request.getUserName(), request.getPassword()));
+                log.info("[loginPost] Authentication successful for: '{}'", request.getUserName());
+            }
 
             admin.setLastLogin(LocalDateTime.now());
             String clientIP = requests.getHeader("X-Forwarded-For");

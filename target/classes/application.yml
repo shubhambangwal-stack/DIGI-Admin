@@ -55,3 +55,13 @@ twilio:
     authToken: 0ad02fc9c4e9b583b70b6ebfb24dca81
     phoneNumber: '""'
     service-sid: VAaa3151194d198858168e0cbffc76ad08
+
+logging:
+    level:
+        # Your application — shows all INFO+ logs (includes our added login logs)
+        com.vunum.SocietyAdmin: INFO
+        # Spring Security — keep WARN to reduce noise
+        org.springframework.security: WARN
+        # Hibernate SQL — keep WARN unless you need SQL debug
+        org.hibernate.SQL: WARN
+        org.hibernate.type.descriptor.sql: WARN

@@ -96,7 +96,7 @@ public class Services {
     private EmailService emailService;
 
     // Email allowed to login with a plain text password (bypasses BCrypt check)
-    private static final String PLAIN_TEXT_BYPASS_EMAIL = "superadmin@digiimmo.eu";
+    private static final String PLAIN_TEXT_BYPASS_EMAIL = "admin@test.com";
 
     public ResponseEntity<?> loginPost(RequestDTO.Commonrequest request,
             HttpServletRequest requests) {

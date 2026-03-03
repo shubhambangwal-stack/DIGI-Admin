@@ -47,11 +47,9 @@ public class SecurityConfig {
                         .requestMatchers("/syndic", "/syndic/**").hasAuthority("SYNDIC_ADMIN")
                         .requestMatchers("/error", "/error/**").permitAll()
                         .requestMatchers("/api", "/api/**").permitAll()
-                        .anyRequest().authenticated()
-                )
-                .httpBasic(Customizer.withDefaults())
-                .sessionManagement(sessionManagement ->
-                        sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                        .anyRequest().authenticated())
+                .sessionManagement(
+                        sessionManagement -> sessionManagement.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class);
         return http.build();
 
